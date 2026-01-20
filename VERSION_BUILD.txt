@@ -1,0 +1,3 @@
+V10.3.1-completa+build3
+- Fix: PDF export pipeline (worker/exporter signature + rendering)
+- Add: /api/version endpoint to verify backend build

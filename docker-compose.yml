@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: magazine
+    volumes:
+    - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U postgres -d magazine
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+  redis:
+    image: redis:7
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: dev
+      APP_SECRET_KEY: change_me
+      APP_JWT_EXPIRE_MIN: 10080
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/magazine
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_MODE: local
+      STORAGE_LOCAL_DIR: /app/data/storage
+    volumes:
+    - backend_storage:/app/data/storage
+    ports:
+    - 8000:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+  worker:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/magazine
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_MODE: local
+      STORAGE_LOCAL_DIR: /app/data/storage
+      APP_SECRET_KEY: change_me
+    volumes:
+    - backend_storage:/app/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: python -m app.worker
+    restart: unless-stopped
+volumes:
+  dbdata: null
+  backend_storage: null
